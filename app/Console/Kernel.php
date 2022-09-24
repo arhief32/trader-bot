@@ -20,17 +20,8 @@ class Kernel extends ConsoleKernel
 
     protected function shortSchedule(\Spatie\ShortSchedule\ShortSchedule $shortSchedule)
     {
-        // // this command will run every second
-        // $shortSchedule->command('artisan-command')->everySecond();
-
-        // this command will run every 30 seconds
-        $shortSchedule->command('command:cryptomarket')->everySeconds(5);
-
-        // // this command will run every half a second
-        // $shortSchedule->command('another-artisan-command')->everySeconds(0.5);
-
-        // // this command will run every second and its signature will be retrieved from command automatically
-        // $shortSchedule->command(\Spatie\ShortSchedule\Tests\Unit\TestCommand::class)->everySecond();
+        // this command will run every 15 seconds
+        $shortSchedule->command('command:cryptomarket')->everySeconds(15);
     }
 
     /**

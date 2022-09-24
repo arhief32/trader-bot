@@ -32,7 +32,7 @@ class CryptoMarket extends Command
         // get all assets from env
         // $assets = env('ASSETS');
         // $assets = explode(',', $assets);
-        $assets = ['bitcoin','ethereum','binance-coin','xrp','cardano','solana','terra-luna','dogecoin','polkadot','polygon','shiba-inu','tron','avalanche','ethereum-classic','litecoin','cosmos','chainlink','monero','algorand','chiliz'];
+        // $assets = ['bitcoin','ethereum','binance-coin','xrp','cardano','solana','terra-luna','dogecoin','polkadot','polygon','shiba-inu','tron','avalanche','ethereum-classic','litecoin','cosmos','chainlink','monero','algorand','chiliz'];
         
         /**guzzle */
         // get data assets from coincap
@@ -70,29 +70,39 @@ class CryptoMarket extends Command
         $response = json_decode($response);
         /**end curl */
         
-        // Log::channel('cryptomarket')->info(json_encode($response->data));
         foreach($response->data as $row_client){
-            Log::channel('cryptomarket')->info(json_encode($assets));
-            foreach($assets as $value)
-            {
-                // Log::channel('cryptomarket')->info(json_encode($key.' - '.$value));
-                if($row_client->id == $value){
-                    // market redis
-                    // $get_market = Redis::get('market_'.$row_client->id);
+            // get market redis
+            $get_market = Redis::get('market_'.$row_client->id);
+            $get_market = json_decode($get_market);
+            $get_market == null ? $assets = [] : $assets = $get_market;
+                    
+            // insert to row market
+            $asset = [
+                'priceUsd' => $row_client->priceUsd,
+                'timestamp' => $response->timestamp,
+            ];
+            array_push($assets, $asset);
 
-                    Redis::set('market_'.$row_client->id, json_encode([
-                        'priceUsd' => $row_client,
-                        'timestamp' => $response->data,
-                    ]));
+            // sort market
+            // usort($assets, function($a,$b){
+            //     return $a->timestamp <=> $b->timestamp;
+            // });
 
-                    Log::build([
-                        'driver' => 'daily',
-                        'path' => storage_path('logs/cryptomarket/'.$value.'/'.$value.'.log'),
-                        'level' => env('LOG_LEVEL', 'info'),
-                        'days' => 14,
-                    ])->info(json_encode((array)$row_client->priceUsd));
-                }
+            // remove if > 20
+            if(count($assets)  > 20){
+                array_shift($assets);
             }
+
+            // update market in redis (del and then set)
+            Redis::del('market_'.$row_client->id);
+            Redis::set('market_'.$row_client->id, json_encode($assets));
+
+            Log::build([
+                'driver' => 'daily',
+                'path' => storage_path('logs/cryptomarket/'.$row_client->id.'/'.$row_client->id.'.log'),
+                'level' => env('LOG_LEVEL', 'info'),
+                'days' => 14,
+            ])->info(json_encode((array)$row_client->priceUsd));
         }
 
     }
