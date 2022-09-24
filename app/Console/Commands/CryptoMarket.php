@@ -53,7 +53,7 @@ class CryptoMarket extends Command
         /**curl */
         $curl = curl_init();
         curl_setopt_array($curl, [
-            CURLOPT_URL => 'api.coincap.io/v2/assets',
+            CURLOPT_URL => 'https://api.coincap.io/v2/markets?exchangeId=binance&quoteSymbol=USDT',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
@@ -72,7 +72,7 @@ class CryptoMarket extends Command
         
         foreach($response->data as $row_client){
             // get market redis
-            $get_market = Redis::get('market_'.$row_client->id);
+            $get_market = Redis::get('market_'.$row_client->baseId);
             $get_market = json_decode($get_market);
             $get_market == null ? $assets = [] : $assets = $get_market;
                     
@@ -93,13 +93,22 @@ class CryptoMarket extends Command
                 array_shift($assets);
             }
 
+            // calculate indicator
+            // $array_indicator = [];
+            // if($assets != null || $assets != 0){
+            //     foreach($assets as $row_asset){
+            //         array_push($array_indicator, $row_asset['priceUsd']);
+            //     }
+            // }
+            // $rsi = trader_rsi($array_indicator , 6);
+
             // update market in redis (del and then set)
-            Redis::del('market_'.$row_client->id);
-            Redis::set('market_'.$row_client->id, json_encode($assets));
+            Redis::del('market_'.$row_client->baseId);
+            Redis::set('market_'.$row_client->baseId, json_encode($assets));
 
             Log::build([
                 'driver' => 'daily',
-                'path' => storage_path('logs/cryptomarket/'.$row_client->id.'/'.$row_client->id.'.log'),
+                'path' => storage_path('logs/cryptomarket/'.$row_client->baseId.'/'.$row_client->baseId.'.log'),
                 'level' => env('LOG_LEVEL', 'info'),
                 'days' => 14,
             ])->info(json_encode((array)$row_client->priceUsd));
