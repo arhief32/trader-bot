@@ -78,7 +78,8 @@ class CryptoMarket extends Command
                     
             // insert to row market
             $asset = [
-                'priceUsd' => $row_client->priceUsd,
+                'price_usd' => $row_client->priceUsd,
+                // 'volume_usd_24_hours' => $row_client->volumeUsd24Hr,
                 'timestamp' => $response->timestamp,
             ];
             array_push($assets, $asset);
@@ -94,13 +95,17 @@ class CryptoMarket extends Command
             }
 
             // calculate indicator
-            // $array_indicator = [];
-            // if($assets != null || $assets != 0){
-            //     foreach($assets as $row_asset){
-            //         array_push($array_indicator, $row_asset['priceUsd']);
-            //     }
-            // }
-            // $rsi = trader_rsi($array_indicator , 6);
+            $array_indicator = [];
+            if($assets != null || $assets != 0){
+                foreach($assets as $row_asset){
+                    if(isset($row_asset->price_usd)){
+                        array_push($array_indicator, $row_asset->price_usd);
+                    }
+                }
+            }
+            $rsi = trader_rsi($array_indicator , 6);
+            $ma = trader_ma($array_indicator, 3, TRADER_MA_TYPE_SMA);
+            // $mfi = trader_mfi($array_indicator, 3, TRADER_MA_TYPE_SMA);
 
             // update market in redis (del and then set)
             Redis::del('market_'.$row_client->baseId);
@@ -111,7 +116,11 @@ class CryptoMarket extends Command
                 'path' => storage_path('logs/cryptomarket/'.$row_client->baseId.'/'.$row_client->baseId.'.log'),
                 'level' => env('LOG_LEVEL', 'info'),
                 'days' => 14,
-            ])->info(json_encode((array)$row_client->priceUsd));
+            ])->info(json_encode([
+                'price_usd' => $row_client->priceUsd,
+                'rsi' => $rsi['6'],
+                'ma' => $ma,
+            ]));
         }
 
     }

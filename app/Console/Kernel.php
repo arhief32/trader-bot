@@ -16,12 +16,13 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         // $schedule->command('inspire')->hourly();
+        // $schedule->command('command:cryptomarket')->everyMinute();
     }
 
     protected function shortSchedule(\Spatie\ShortSchedule\ShortSchedule $shortSchedule)
     {
         // this command will run every 15 seconds
-        $shortSchedule->command('command:cryptomarket')->everySeconds(15);
+        $shortSchedule->command('command:cryptomarket')->everySeconds(60);
     }
 
     /**
