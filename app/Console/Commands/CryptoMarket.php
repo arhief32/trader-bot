@@ -90,7 +90,7 @@ class CryptoMarket extends Command
             // });
 
             // remove if > 100
-            if(count($assets)  > 100){
+            if(count($assets)  > 20){
                 array_shift($assets);
             }
 
@@ -103,7 +103,7 @@ class CryptoMarket extends Command
                     }
                 }
             }
-            $rsi = trader_rsi($array_indicator , 6);
+            $rsi = trader_rsi($array_indicator, 6);
             isset($rsi[6]) ? $rsi = $rsi[6] : $rsi = false;
             
             // update market in redis (del and then set)

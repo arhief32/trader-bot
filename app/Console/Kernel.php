@@ -22,7 +22,7 @@ class Kernel extends ConsoleKernel
     protected function shortSchedule(\Spatie\ShortSchedule\ShortSchedule $shortSchedule)
     {
         // this command will run every 15 seconds
-        $shortSchedule->command('command:cryptomarket')->everySeconds(30);
+        $shortSchedule->command('command:cryptomarket')->everySeconds(60);
     }
 
     /**
