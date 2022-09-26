@@ -72,7 +72,7 @@ class CryptoMarket extends Command
         
         foreach($response->data as $row_client){
             // get market redis
-            $get_market = Redis::get('market_'.$row_client->baseId);
+            $get_market = Redis::get('market_'.$row_client->baseSymbol);
             $get_market = json_decode($get_market);
             $get_market == null ? $assets = [] : $assets = $get_market;
                     
@@ -89,8 +89,8 @@ class CryptoMarket extends Command
             //     return $a->timestamp <=> $b->timestamp;
             // });
 
-            // remove if > 20
-            if(count($assets)  > 20){
+            // remove if > 100
+            if(count($assets)  > 100){
                 array_shift($assets);
             }
 
@@ -104,24 +104,22 @@ class CryptoMarket extends Command
                 }
             }
             $rsi = trader_rsi($array_indicator , 6);
-            $ma = trader_ma($array_indicator, 3, TRADER_MA_TYPE_SMA);
-            // $mfi = trader_mfi($array_indicator, 3, TRADER_MA_TYPE_SMA);
-
+            isset($rsi[6]) ? $rsi = $rsi[6] : $rsi = false;
+            
             // update market in redis (del and then set)
-            Redis::del('market_'.$row_client->baseId);
-            Redis::set('market_'.$row_client->baseId, json_encode($assets));
+            Redis::del('market_'.$row_client->baseSymbol);
+            Redis::set('market_'.$row_client->baseSymbol, json_encode($assets));
 
             Log::build([
                 'driver' => 'daily',
-                'path' => storage_path('logs/cryptomarket/'.$row_client->baseId.'/'.$row_client->baseId.'.log'),
+                'path' => storage_path('logs/cryptomarket/'.$row_client->baseSymbol.'/'.$row_client->baseId.'.log'),
                 'level' => env('LOG_LEVEL', 'info'),
                 'days' => 14,
             ])->info(json_encode([
                 'price_usd' => $row_client->priceUsd,
-                'rsi' => $rsi['6'],
-                'ma' => $ma,
+                'updated_at' => date('Y-m-d h:i:s', $row_client->updated/1000),
+                'rsi' => $rsi,
             ]));
         }
-
     }
 }
