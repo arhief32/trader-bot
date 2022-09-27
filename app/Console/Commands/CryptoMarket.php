@@ -33,71 +33,45 @@ class CryptoMarket extends Command
         // $assets = env('ASSETS');
         // $assets = explode(',', $assets);
         // $assets = ['bitcoin','ethereum','binance-coin','xrp','cardano','solana','terra-luna','dogecoin','polkadot','polygon','shiba-inu','tron','avalanche','ethereum-classic','litecoin','cosmos','chainlink','monero','algorand','chiliz'];
+        $assets = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','LUNAUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','SHIBUSDT','TRXUSDT','AVAXUSDT','ETCUSDT','LTCUSDT','ATOMUSDT','LINKUSDT','XMRUSDT','ALGOUSDT','CHZUSDT'];
         
-        /**guzzle */
-        // get data assets from coincap
-        // $client = new \GuzzleHttp\Client([
-        //     'base_uri' => env('COINCAP_URL'),
-        //     'verify'=> false,
-        //     'debug' => false, // optional
-        // ]);
-        // $request = $client->request('GET', '/v2/assets',
-        // [
-        //     'headers' => [
-        //         'Authorization' => 'Bearer '.env('COINCAP_API_KEY'),
-        //     ],
-        // ]);
-        // $response = json_decode($request->getBody());
-        /**end guzzle */
+        foreach($assets as $asset){
+            // request to get price real-time
+            $client_average_price = new \GuzzleHttp\Client([
+                'base_uri' => 'https://api.binance.com/api',
+                'verify'=> false,
+                'debug' => false, // optional
+            ]);
+            $request_average_price = $client_average_price->request('GET', '/api/v3/avgPrice?symbol='.$asset);
+            $response_average_price = json_decode($request_average_price->getBody());
+            
+            Log::channel('cryptomarket')->info(json_encode($response_average_price));
 
-        /**curl */
-        $curl = curl_init();
-        curl_setopt_array($curl, [
-            CURLOPT_URL => 'https://api.coincap.io/v2/markets?exchangeId=binance&quoteSymbol=USDT',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer b6f8499c-2c50-4f83-bb4c-397a3abec5e3'
-            ]
-        ]);
-        $response = curl_exec($curl);
-        curl_close($curl);
-        $response = json_decode($response);
-        /**end curl */
-        
-        foreach($response->data as $row_client){
             // get market redis
-            $get_market = Redis::get('market_'.$row_client->baseSymbol);
+            $get_market = Redis::get('market_'.$asset);
             $get_market = json_decode($get_market);
-            $get_market == null ? $assets = [] : $assets = $get_market;
+            $get_market == null ? $asset_prices = [] : $asset_prices = $get_market;
                     
-            // insert to row market
-            $asset = [
-                'price_usd' => $row_client->priceUsd,
-                // 'volume_usd_24_hours' => $row_client->volumeUsd24Hr,
-                'timestamp' => $response->timestamp,
+            // // insert to row market
+            $response_average_price->price > 1 ? $response_average_price->price = round($response_average_price->price, 4) : false;
+            $response_average_price->price < 1 && $response_average_price->price > 0.1 ? $response_average_price->price = round($response_average_price->price, 4) : false;
+            $response_average_price->price < 0.1 && $response_average_price->price > 0.01 ? $response_average_price->price = round($response_average_price->price, 5) : false;
+            $response_average_price->price < 0.01 && $response_average_price->price > 0.001 ? $response_average_price->price = round($response_average_price->price, 6) : false;
+            $response_average_price->price < 0.001 && $response_average_price->price > 0.0001 ? $response_average_price->price = round($response_average_price->price, 7) : false;
+            $asset_price = [
+                'price_usd' => $response_average_price->price,
             ];
-            array_push($assets, $asset);
+            array_push($asset_prices, $asset_price);
 
-            // sort market
-            // usort($assets, function($a,$b){
-            //     return $a->timestamp <=> $b->timestamp;
-            // });
-
-            // remove if > 100
-            if(count($assets)  > 20){
-                array_shift($assets);
+            // // remove if > 100
+            if(count($asset_prices)  > 7){
+                array_shift($asset_prices);
             }
 
-            // calculate indicator
+            // // calculate indicator
             $array_indicator = [];
-            if($assets != null || $assets != 0){
-                foreach($assets as $row_asset){
+            if($asset_prices != null || $asset_prices != 0){
+                foreach($asset_prices as $row_asset){
                     if(isset($row_asset->price_usd)){
                         array_push($array_indicator, $row_asset->price_usd);
                     }
@@ -107,18 +81,18 @@ class CryptoMarket extends Command
             isset($rsi[6]) ? $rsi = $rsi[6] : $rsi = false;
             
             // update market in redis (del and then set)
-            Redis::del('market_'.$row_client->baseSymbol);
-            Redis::set('market_'.$row_client->baseSymbol, json_encode($assets));
+            Redis::del('market_'.$asset);
+            Redis::set('market_'.$asset, json_encode($asset_prices));
 
             Log::build([
                 'driver' => 'daily',
-                'path' => storage_path('logs/cryptomarket/'.$row_client->baseSymbol.'/'.$row_client->baseId.'.log'),
+                'path' => storage_path('logs/cryptomarket/'.$asset.'/'.$asset.'.log'),
                 'level' => env('LOG_LEVEL', 'info'),
                 'days' => 14,
             ])->info(json_encode([
-                'price_usd' => $row_client->priceUsd,
-                'updated_at' => date('Y-m-d h:i:s', $row_client->updated/1000),
+                'price_usd' => $asset_price['price_usd'],
                 'rsi' => $rsi,
+                'array_indicator' => $array_indicator,
             ]));
         }
     }
