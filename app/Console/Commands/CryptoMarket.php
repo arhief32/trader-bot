@@ -78,7 +78,7 @@ class CryptoMarket extends Command
             ])->info(json_encode([
                 'price_usd' => end($data_market),
                 'rsi' => $rsi,
-                'macd' => $macd[0]['57'],
+                'macd' => testFunction(),
             ]));
         }
     }
