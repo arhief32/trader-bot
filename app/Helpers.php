@@ -12,7 +12,7 @@ function requestKlines($asset, $interval, $limit)
 {
     // request to get price real-time
     $client_klines = new \GuzzleHttp\Client([
-        'base_uri' => 'https://fapi.binance.com/api',
+        'base_uri' => env('BINANCE_FUTURES_URL'),
         'verify'=> false,
         'debug' => false, // optional
     ]);
