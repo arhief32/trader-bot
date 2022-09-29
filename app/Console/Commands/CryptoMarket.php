@@ -30,28 +30,14 @@ class CryptoMarket extends Command
     public function handle()
     {
         // get all assets from env
-        // $assets = env('ASSETS');
-        // $assets = explode(',', $assets);
-        // $assets = ['bitcoin','ethereum','binance-coin','xrp','cardano','solana','terra-luna','dogecoin','polkadot','polygon','shiba-inu','tron','avalanche','ethereum-classic','litecoin','cosmos','chainlink','monero','algorand','chiliz'];
-        $assets = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','LUNAUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','TRXUSDT','AVAXUSDT','ETCUSDT','LTCUSDT','ATOMUSDT','LINKUSDT','XMRUSDT','ALGOUSDT','CHZUSDT'];
+        $assets = env('coins');
+        $assets = explode(',', $assets);
         
         foreach($assets as $asset){
-            // request to get price real-time
-            $client_klines = new \GuzzleHttp\Client([
-                'base_uri' => 'https://fapi.binance.com/api',
-                'verify'=> false,
-                'debug' => false, // optional
-            ]);
-            $request_klines = $client_klines->request('GET', '/fapi/v1/klines', [
-                'query' => [
-                    'symbol' => $asset,
-                    'interval' => '1m',
-                    'limit' => '60',
-                ],
-            ]);
-            $response_klines = json_decode($request_klines->getBody());
-            
-            Log::channel('cryptomarket')->info(json_encode($response_klines));
+            // get data current asset
+            $interval = '1m';
+            $limit = '60';
+            $response_klines = requestKlines($asset, $interval, $limit);
 
             // // calculate indicator
             $data_market = [];
@@ -64,22 +50,19 @@ class CryptoMarket extends Command
             $rsi = trader_rsi($data_market, 6);
             isset($rsi[6]) ? $rsi = $rsi[6] : $rsi = false;
             // macd
-            $macd = trader_macd($data_market, 12, 26,9);
+            $macd = trader_macd($data_market, 12, 26);
             
             // update market in redis (del and then set)
-            Redis::del('market_'.$asset);
-            Redis::set('market_'.$asset, json_encode($data_market));
+            updateRedis('market_'.$asset, $data_market);
 
-            Log::build([
-                'driver' => 'daily',
-                'path' => storage_path('logs/cryptomarket/'.$asset.'/'.$asset.'.log'),
-                'level' => env('LOG_LEVEL', 'info'),
-                'days' => 14,
-            ])->info(json_encode([
+            // insert log each asset
+            $log_path = 'logs/cryptomarket/'.$asset.'/'.$asset.'.log';
+            $log_data = [
                 'price_usd' => end($data_market),
                 'rsi' => $rsi,
-                'macd' => testFunction(),
-            ]));
+                'macd' => $macd,
+            ];
+            insertLogAsset($log_path, $log_data);
         }
     }
 }
