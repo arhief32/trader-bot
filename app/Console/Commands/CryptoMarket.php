@@ -53,7 +53,7 @@ class CryptoMarket extends Command
             $macd = trader_macd($data_market, 12, 26);
             
             // update market in redis (del and then set)
-            updateRedis('market_'.$asset, $data_market);
+            updateRedis('MARKET_'.$asset, $data_market);
 
             // insert log each asset
             $log_path = 'logs/cryptomarket/'.$asset.'/'.$asset.'.log';

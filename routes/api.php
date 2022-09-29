@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Redis;
+use App\Models\MACD;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,4 +31,34 @@ Route::get('test-rsi', function(){
         'data' => [$test_array[0], $test_array[1], $test_array[2], $test_array[3], $test_array[4], $test_array[5]],
         'rsi' => $test_rsi,
     ]);
+});
+
+Route::post('test-macd', function(Request $request){
+    $data = $request->data;
+    $macd = MACD::processMacdData($data, 0, false, 12, 26, 9);
+    return response()->json($macd);
+});
+
+Route::get('exchange-info', function(){
+    return requestExchangeInfo();
+});
+
+Route::get('set-precision', function(){
+    setPrecision();
+});
+
+Route::get('ticker', function(){
+    return requestTicker('BTCUSDT')->lastPrice;
+});
+
+Route::get('account', function(){
+    return requestAccountInformation();
+});
+
+Route::post('new-order', function(Request $request){
+    return response()->json(requestTradeNewOrder($request->symbol, $request->side, $request->amount));
+});
+
+Route::post('take-profit', function(Request $request){
+    return response()->json(requestTakeProfit($request->symbol, $request->side, $request->tp_percent));
 });
