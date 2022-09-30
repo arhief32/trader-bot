@@ -8,135 +8,71 @@ use Illuminate\Database\Eloquent\Model;
 class MACD extends Model
 {
     use HasFactory;
-    public static function processMacdData($dataStore, $scrip, $all = false, $sm = 12, $mid = 26, $sig = 9)
+    public static function processMacdData($symbol)
     {
-        /*Process MA data as follows
-         1. Loop only once to calculate everything
-         2. get 26 day EMA for today and yesterday
-         3. get 12 day EMA for today and yesterday
-         4. get 9 day EMA for today and yesterday
-         5. get today's Volume
-         6. get average of 5 day volume
-         */
+        $data = getRedis('MARKET_' . $symbol);
 
-        /* Initialize vars */
-        $j = 0;
-        $long = 200;
+        $array_macd = [];
 
-        $emaSm = 0;
-        $emaMid = 0;
-        $emaLong = 0;
-        $emaSig = 0;
-
-        /* Calculate EMA multipliers */
-        $multSm = 2 / ($sm + 1);
-        $multMid = 2 / ($mid + 1);
-        $multLong = 2 / ($long + 1);
-        $multSig = 2 / ($sig + 1);
-
-        $totalSm = 0;
-        $totalMid = 0;
-        $totalLong = 0;
-        $totalSig = 0;
-        $totalV = 0;
-
-        $results = array();
-
-        /* Check whether we have enough data to calculate MA crossover */
-        $datacount = count($dataStore);
-        $required = $mid * 6;
-        if ($datacount < $required) {
-            /* Unable to proceed return zero */
-            error_log("Not enough data(count = $datacount, required = $required): $scrip");
-            return $results;
+        foreach ($data as $row) {
+            array_push($array_macd, [
+                'close' => (float)$row,
+                'ema_12' => 0,
+                'ema_26' => 0,
+                'macd' => 0,
+                'signal' => 0,
+                'histogram' => 0,
+            ]);
         }
 
-        /* MACD calculation must be done with single pass. Iterate once and calculate
-         everything.
-         */
-        for ($i = 0; $i < $datacount; $i++) {
-
-            $curr_data = $dataStore[$i];
-            $curr_c = $curr_data["c"];
-            $curr_v = $curr_data["v"];
-            $curr_d = $curr_data["d"];
-
-            /**************************************************************************/
-            if ($i < $sm) {
-                $totalSm += $curr_c;
-            }
-            if ($i == $sm - 1) {
-                $emaSm = $totalSm / $sm;
-                unset($totalSm);
-            }
-            if ($i >= $sm) {
-                $emaSm = (($curr_c - $emaSm) * $multSm) + $emaSm;
-            }
-            /**************************************************************************/
-            if ($i < $mid) {
-                $totalMid += $curr_c;
-            }
-            if ($i == $mid - 1) {
-                $emaMid = $totalMid / $mid;
-                unset($totalMid);
-            }
-            if ($i >= $mid) {
-                $emaMid = (($curr_c - $emaMid) * $multMid) + $emaMid;
-            }
-            /**************************************************************************/
-            if ($i < $long) {
-                $totalLong += $curr_c;
-            }
-            if ($i == $long - 1) {
-                $emaLong = $totalLong / $long;
-                unset($totalLong);
-            }
-            if ($i >= $long) {
-                $emaLong = (($curr_c - $emaLong) * $multLong) + $emaLong;
-            }
-            /**************************************************************************/
-            if ($emaSm && $emaMid) {
-                $curr_macd = round($emaSm - $emaMid, 2);
-
-                /* Calculate signal */
-                if ($j < $sig) {
-                    $totalSig += $curr_macd;
-                }
-                if ($j == $sig - 1) {
-                    $emaSig = $totalSig / $sig;
-                    unset($totalSig);
-                }
-                if ($j >= $sig) {
-                    $emaSig = (($curr_macd - $emaSig) * $multSig) + $emaSig;
-                }
-
-                /* Add to results */
-                if ($emaSig) {
-                    if ($all) {
-                        $results[$curr_d] = array("m" => $curr_macd
-                            , "s" => round($emaSig, 2)
-                            , "c" => $curr_c
-                            , "v" => $curr_v
-                        );
-                    }
-                    else {
-                        if ($i >= $datacount - 2) {
-                            $results[] = array("macd" => $curr_macd
-                                , "signal" => round($emaSig, 2)
-                                , "close" => $curr_c
-                                , "volume" => $curr_v
-                                , "long" => round($emaLong)
-                                , "date" => $curr_d
-                            );
-                        }
-                    }
-                }
-                /* counter for macd values */
-                $j += 1;
-            }
-        /**************************************************************************/
+        // ema12
+        $data_12 = array_slice($data, 0, 12);
+        $average_12 = array_sum($data_12) / count($data_12);
+        $array_macd[11]['ema_12'] = $average_12;
+        $next_data_12 = array_slice($data, 12);
+        foreach ($next_data_12 as $key_nd12 => $value_nd12) {
+            $value_ema_12 = (float)$array_macd[12 + $key_nd12]['close'] * (2 / (12 + 1)) + $array_macd[12 + $key_nd12 - 1]['ema_12'] * (1 - (2 / (12 + 1)));
+            $array_macd[12 + $key_nd12]['ema_12'] = $value_ema_12;
         }
 
-        return $results;    
+        // ema26
+        $data_26 = array_slice($data, 0, 26);
+        $average_26 = array_sum($data_26) / count($data_26);
+        $array_macd[25]['ema_26'] = $average_26;
+        $next_data_26 = array_slice($data, 26);
+        foreach ($next_data_26 as $key_nd26 => $value_nd26) {
+            $value_ema_26 = (float)$array_macd[26 + $key_nd26]['close'] * (2 / (26 + 1)) + $array_macd[26 + $key_nd26 - 1]['ema_26'] * (1 - (2 / (26 + 1)));
+            $array_macd[26 + $key_nd26]['ema_26'] = $value_ema_26;
+        }
+
+        // macd
+        foreach ($array_macd as $key_macd => $row_macd) {
+            if ($row_macd['ema_12'] != 0 && $row_macd['ema_26'] != 0) {
+                $array_macd[$key_macd]['macd'] = $row_macd['ema_12'] - $row_macd['ema_26'];
+            }
+        }
+
+        // signal
+        $data_macd = array_slice($array_macd, 25, 9);
+        $data_9 = [];
+        foreach ($data_macd as $row_data_macd) {
+            array_push($data_9, $row_data_macd['macd']);
+        }
+        $average_9 = array_sum($data_9) / count($data_9);
+        $array_macd[33]['signal'] = $average_9;
+        $next_data_9 = array_slice($array_macd, 34);
+        foreach ($next_data_9 as $key_nd9 => $value_nd9) {
+            $value_signal = (float)$array_macd[34 + $key_nd9]['macd'] * (2 / (9 + 1)) + $array_macd[9 + $key_nd9 - 1]['signal'] * (1 - (2 / (9 + 1)));
+            $array_macd[34 + $key_nd9]['signal'] = $value_signal;
+        }
+
+        // histogram
+        foreach ($array_macd as $key_macd => $row_macd) {
+            if ($row_macd['macd'] != 0 && $row_macd['signal'] != 0) {
+                $array_macd[$key_macd]['histogram'] = $row_macd['macd'] - $row_macd['signal'];
+            }
+        }
+
+        return $array_macd;
     }
 }

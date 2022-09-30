@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use App\Models\MACD;
 
 class CryptoMarket extends Command
 {
@@ -46,15 +47,16 @@ class CryptoMarket extends Command
                     array_push($data_market, $price[4]);
                 }
             }
+            // update market in redis (del and then set)
+            updateRedis('MARKET_'.$asset, $data_market);
+
             // rsi
             $rsi = trader_rsi($data_market, 6);
             isset($rsi[6]) ? $rsi = $rsi[6] : $rsi = false;
             // macd
-            $macd = trader_macd($data_market, 12, 26);
+            $macd = MACD::processMacdData($asset);
+            $macd = end($macd);
             
-            // update market in redis (del and then set)
-            updateRedis('MARKET_'.$asset, $data_market);
-
             // insert log each asset
             $log_path = 'logs/cryptomarket/'.$asset.'/'.$asset.'.log';
             $log_data = [
