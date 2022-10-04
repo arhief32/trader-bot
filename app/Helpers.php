@@ -113,6 +113,7 @@ function requestKlines($asset, $interval, $limit)
     $data = [];
     foreach($response_klines as $row_klines){
         array_push($data, [
+            'timestamp' => (int)$row_klines[0],
             'date' => date('Y-m-d H:i:s', (int)$row_klines[0]/1000),
             'open' => (float)$row_klines[1],
             'high' => (float)$row_klines[2],
@@ -209,26 +210,35 @@ function requestTradeNewOrder($symbol, $side, $amount)
     $quantity = round($amount/$last_price, $quantity_precision);
     $diff_order_price = diffOrderPrice($price_precision);
     $side == 'BUY' ? $diff_order_price = -($diff_order_price) : false;
-    $price = round($last_price + $diff_order_price, $price_precision);
+    // $price = round($last_price + $diff_order_price, $price_precision);
     
     $timestamp = intval(microtime(true) * 1000);
-    $query=[
+    // $query=[
+    //     'symbol' => $symbol,
+    //     'side' => $side,
+    //     'type' => 'LIMIT',
+    //     'timeInForce' => 'GTC',
+    //     'quantity' => $quantity,
+    //     'price' => $price,
+    //     'timestamp' => $timestamp,
+    // ];
+    // MARKET
+    $query_order= [
         'symbol' => $symbol,
         'side' => $side,
-        'type' => 'LIMIT',
-        'timeInForce' => 'GTC',
-        'quantity' => $quantity,
-        'price' => $price,
+        'type' => 'MARKET',
+        'quantity' => (string)$quantity,
+        'workingType' => 'MARK_PRICE',
         'timestamp' => $timestamp,
     ];
     
-    $query_string = http_build_query($query);
+    $query_string = http_build_query($query_order);
     
     // generate signature
     $signature = signature($query_string, $api_secret);
     
     // insert timestamps and signature to query params
-    $query['signature'] = $signature;
+    $query_order['signature'] = $signature;
     
     // request to get price real-time
     $client_trade_new_order = new \GuzzleHttp\Client([
@@ -240,9 +250,10 @@ function requestTradeNewOrder($symbol, $side, $amount)
         'headers' => [
             'X-MBX-APIKEY' => $api_key,
         ],
-        'query' => $query,
+        'query' => $query_order,
     ]);
     $response_trade_new_order = json_decode($request_trade_new_order->getBody());
+    insertLogOrder('logs/trade/trade.log', $response_trade_new_order);
     return $response_trade_new_order;
 }
 

@@ -38,8 +38,10 @@ Route::get('test-macd', function(Request $request){
     $klines = requestKlines($request->symbol, $request->interval, $request->limit);    
     
     // calculate macd
-    $macd = MACD::run($klines);
+    // $macd = MACD::run($klines);
+    $macd = MACD::calculate($klines);
 
+    // return response()->json($klines);
     return response()->json($macd);
     
 });
@@ -79,6 +81,7 @@ Route::get('position-risk', function(){
 });
 
 Route::post('new-order', function(Request $request){
+    // return response()->json(requestTradeNewOrder($request->symbol, $request->side, $request->amount));
     return response()->json(requestTradeNewOrder($request->symbol, $request->side, $request->amount));
 });
 

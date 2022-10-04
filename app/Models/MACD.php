@@ -193,4 +193,56 @@ class MACD extends Model
 
         return $data;
     }
+
+    static function calculate($data)
+    {
+        $data_close = [];
+        foreach($data as $row_close){
+            array_push($data_close, $row_close['close']);
+        }
+
+        $ema12 = MACD::calculateEMA($data_close, 12);
+        $ema26 = MACD::calculateEMA($data_close, 26);
+        $macd = []; 
+        for($i = 0; $i < count($ema12); $i++) {
+            $macd_value = round((float)$ema12[$i] - (float)$ema26[$i], 8);
+            array_push($macd, (float)$macd_value);
+        }
+
+        $ema9 = MACD::calculateEMA($macd, 9);
+        
+        for($i = 0; $i < count($data); $i++) {
+            $ema12_line = $ema12[$i];
+            $ema26_line = $ema26[$i];
+            $macd_line = $macd[$i];
+            $signal_line = $ema9[$i];
+
+            $data[$i]['macd']['ema12'] = $ema12_line;
+            $data[$i]['macd']['ema26'] = $ema26_line;
+            $data[$i]['macd']['macd_line'] = $macd_line;
+            $data[$i]['macd']['signal_line'] = $signal_line;
+
+            if($i != 0){
+                if($data[$i-1]['macd']['macd_line'] < $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] > $data[$i]['macd']['signal_line']){
+                    $data[$i]['macd']['status'] = 'BUY';
+                } else if($data[$i-1]['macd']['macd_line'] > $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] < $data[$i]['macd']['signal_line']){
+                    $data[$i]['macd']['status'] = 'SELL';
+                } else {
+                    $data[$i]['macd']['status'] = 'NONE';
+                }
+            }
+        }
+
+        return $data;
+    }
+    static function calculateEMA(array $dps, int $m_range)
+    {
+        $k = 2/($m_range + 1);
+        $ema_dps[0] = $dps[0];
+        for ($i = 1; $i < count($dps); $i++) {
+            $row_ema_dps = (float)$dps[$i] * (float)$k + (float)$ema_dps[$i - 1] * (1 - (float)$k);
+            array_push($ema_dps, round((float)$row_ema_dps, 8));
+        }
+        return $ema_dps;
+    }
 }

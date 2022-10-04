@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -17,6 +18,19 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('macd', function(){
-    return view('macd_chart');
+Route::get('chart', function(Request $request){
+    $klines = requestKlines($request->symbol, '1m', 300);
+    $array_klines = [];
+    foreach($klines as $row_klines){
+        array_push($array_klines, [
+            'x' => $row_klines['timestamp'],
+            'y' => [
+                (float)$row_klines['open'],
+                (float)$row_klines['high'],
+                (float)$row_klines['low'],
+                (float)$row_klines['close'],
+            ],
+        ]);
+    }
+    return view('chart', ['name' => $request->symbol, 'data' => $array_klines]);
 });

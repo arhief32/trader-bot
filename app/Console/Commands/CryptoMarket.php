@@ -34,7 +34,8 @@ class CryptoMarket extends Command
         // get all assets from env
         // $assets = env('coins');
         // $assets = explode(',', $assets);
-        $assets = getRedis('LIST_ASSETS');
+        // $assets = getRedis('LIST_ASSETS');
+        $assets = ['ETHUSDT','BTCUSDT','ADAUSDT'];
 
         // check position market
         $position_risk = requestPositionRisk();
@@ -55,21 +56,22 @@ class CryptoMarket extends Command
             $limit = '60';
             $response_klines = requestKlines($asset, $interval, $limit);
 
-            // rsi
-            $response_klines = RSI::run($response_klines);
-            // macd
-            $response_klines = MACD::run($response_klines);
+            // // rsi
+            // $response_klines = RSI::calculate($response_klines);
+            // // macd
+            $response_klines = MACD::calculate($response_klines);
 
             $end_response_klines = end($response_klines);
-            if(count(getPrefixRedis('POSITION_RISK_*')) <= 7){
-                if (getRedis('POSITION_RISK_' .$asset) == false) {
-                    if ($end_response_klines['rsi'] > 70 && $end_response_klines['status'] == 'SELL') {
-                        requestMultipleOrders($asset, 'SELL', 20, 0.5);
-                    }
-                    else if ($end_response_klines['rsi'] < 30 && $end_response_klines['status'] == 'BUY') {
-                        requestMultipleOrders($asset, 'BUY', 15, 0.5);
-                    }
+            if ($end_response_klines['macd']['status'] == 'SELL') {
+                if(getRedis('POSITION_RISK_' .$asset) != false) {
+                    requestTradeNewOrder($asset, 'SELL', 20);
                 }
+                requestTradeNewOrder($asset, 'SELL', 20);
+            } else if($end_response_klines['macd']['status'] == 'BUY') {
+                if(getRedis('POSITION_RISK_' .$asset) != false) {
+                    requestTradeNewOrder($asset, 'BUY', 20);
+                }
+                requestTradeNewOrder($asset, 'BUY', 20);
             }
 
             // insert log each asset
