@@ -61,18 +61,18 @@ class CryptoMarket extends Command
             // // macd
             $response_klines = MACD::calculate($response_klines);
 
-            $end_response_klines = end($response_klines);
-            if ($end_response_klines['macd']['status'] == 'SELL') {
-                if(getRedis('POSITION_RISK_' .$asset) != false) {
-                    requestTradeNewOrder($asset, 'SELL', 20);
-                }
-                requestTradeNewOrder($asset, 'SELL', 20);
-            } else if($end_response_klines['macd']['status'] == 'BUY') {
-                if(getRedis('POSITION_RISK_' .$asset) != false) {
-                    requestTradeNewOrder($asset, 'BUY', 20);
-                }
-                requestTradeNewOrder($asset, 'BUY', 20);
-            }
+            // $end_response_klines = end($response_klines);
+            // if ($end_response_klines['macd']['status'] == 'SELL') {
+            //     if(getRedis('POSITION_RISK_' .$asset) != false) {
+            //         requestTradeNewOrder($asset, 'SELL', 20);
+            //     }
+            //     requestTradeNewOrder($asset, 'SELL', 20);
+            // } else if($end_response_klines['macd']['status'] == 'BUY') {
+            //     if(getRedis('POSITION_RISK_' .$asset) != false) {
+            //         requestTradeNewOrder($asset, 'BUY', 20);
+            //     }
+            //     requestTradeNewOrder($asset, 'BUY', 20);
+            // }
 
             // insert log each asset
             $log_path = 'logs/cryptomarket/' . $asset . '/' . $asset . '.log';
