@@ -65,34 +65,34 @@ function diffOrderPrice(int $price_precision)
 {
     switch ($price_precision) {
         case 1:
-            return (float)5;
+            return (float)1;
             break;
         case 2:
-            return (float)0.5;
+            return (float)0.1;
             break;
         case 3:
-            return (float)0.05;
+            return (float)0.01;
             break;
         case 4:
             return (float)0.005;
             break;
         case 5:
-            return (float)0.0005;
+            return (float)0.0010;
             break;
         case 6:
-            return (float)0.00005;
+            return (float)0.00015;
             break;
         case 7:
-            return (float)0.000005;
+            return (float)0.000020;
             break;
         case 8:
-            return (float)0.0000005;
+            return (float)0.0000025;
             break;
         case 9:
-            return (float)0.00000005;
+            return (float)0.00000030;
             break;
         default:
-            return (float)0.000000005;
+            return (float)0.000000035;
     }
 }
 
@@ -262,7 +262,7 @@ function requestTradeNewOrder($symbol, $side, $amount)
     // $price = round($last_price + $diff_order_price, $price_precision);
     
     $timestamp = intval(microtime(true) * 1000);
-    // $query=[
+    // $query_order = [
     //     'symbol' => $symbol,
     //     'side' => $side,
     //     'type' => 'LIMIT',

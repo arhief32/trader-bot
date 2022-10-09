@@ -34,3 +34,20 @@ Route::get('chart', function(Request $request){
     }
     return view('chart', ['name' => $request->symbol, 'data' => $array_klines]);
 });
+
+Route::get('ema', function(Request $request){
+    $klines = requestKlines($request->symbol, '1m', 300);
+    $array_klines = [];
+    foreach($klines as $row_klines){
+        array_push($array_klines, [
+            'x' => $row_klines['timestamp'],
+            'y' => [
+                (float)$row_klines['open'],
+                (float)$row_klines['high'],
+                (float)$row_klines['low'],
+                (float)$row_klines['close'],
+            ],
+        ]);
+    }
+    return view('ema', ['name' => $request->symbol,'data' => $array_klines]);
+});

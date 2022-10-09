@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\PositionRisk;
 use App\Models\MACD;
+use App\Models\EMA;
 
 class CryptoMarket extends Command
 {
@@ -32,7 +33,7 @@ class CryptoMarket extends Command
         // get all assets from env
         // $assets = env('coins');
         // $assets = explode(',', $assets);
-        $symbols = ['XLMUSDT', 'XRPUSDT', 'UNFIUSDT', 'XMRUSDT', 'KAVAUSDT', 'ETHUSDT', 'BTCUSDT', 'MKRUSDT', 'RVNUSDT', 'COMPUSDT'];
+        $symbols = ['GALAUSDT'];
 
         // update position risk
         requestPositionRisk();
@@ -44,29 +45,30 @@ class CryptoMarket extends Command
             $response_klines = requestKlines($symbol, $interval, $limit);
 
             // // macd
-            $macd = MACD::calculate($response_klines);
-            $last_macd = end($macd);
+            // $macd = MACD::calculate($response_klines);
+            $ema = EMA::calculate($response_klines, 7, 25);
+            $last_klines = end($ema);
 
             // insert log each asset
             $log_path = 'logs/cryptomarket/' . $symbol . '/' . $symbol . '.log';
-            insertLogAsset($log_path, $last_macd);
+            insertLogAsset($log_path, $last_klines);
             insertLogIndicator([
                 'symbol' => $symbol,
-                'macd' => $last_macd['macd'],
+                'ema' => $last_klines['ema'],
             ]);
 
 			// if position risk from binance/db is 0
             $position_risk = PositionRisk::where('symbol', $symbol)->first();
             if($position_risk == false){
-                if($last_macd['macd']['status'] == 'SELL'){
+                if($last_klines['ema']['status'] == 'SELL'){
                     requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
-                } elseif($last_macd['macd']['status'] == 'BUY'){
+                } elseif($last_klines['ema']['status'] == 'BUY'){
                     requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
                 }
             }
 
             if($position_risk == true){
-                if($last_macd['macd']['status'] == 'SELL' || $last_macd['macd']['status'] == 'BUY'){
+                if($last_klines['ema']['status'] == 'SELL' || $last_klines['ema']['status'] == 'BUY'){
 					// close position first
                     if($position_risk->position_amount > 0){
                         requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
@@ -76,9 +78,9 @@ class CryptoMarket extends Command
                 }
 
 				// enter position when condition status SELL or BUY
-                if($last_macd['macd']['status'] == 'SELL'){
+                if($last_klines['ema']['status'] == 'SELL'){
                     requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
-                } elseif($last_macd['macd']['status'] == 'BUY'){
+                } elseif($last_klines['ema']['status'] == 'BUY'){
                     requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
                 }
             }

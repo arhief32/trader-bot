@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Redis;
 use App\Models\MACD;
+use App\Models\EMA;
 use App\Models\RSI;
 
 /*
@@ -44,6 +45,26 @@ Route::get('test-macd', function(Request $request){
     // return response()->json($klines);
     return response()->json($macd);
     
+});
+
+Route::get('test-ema', function(Request $request){
+    $klines = requestKlines($request->symbol, $request->interval, $request->limit);    
+    $data = [];
+    foreach($klines as $row_klines){
+        array_push($data, $row_klines['close']);
+    }
+
+    // calculate macd
+    $ema = EMA::calculate($klines, 7, 25);
+    // $ema7 = trader_ema($data, 7);
+    // $ema25 = trader_ema($data, 25);
+
+    // foreach($klines as $key => $value){
+    //     isset($ema7[$key]) ? $klines[$key]['ema']['ema7'] = $ema7[$key] : $klines[$key]['ema']['ema7'] = 0;
+    //     isset($ema25[$key]) ? $klines[$key]['ema']['ema25'] = $ema25[$key] : $klines[$key]['ema']['ema25'] = 0;
+    // }
+
+    return response()->json($ema);
 });
 
 Route::get('exchange-info', function(){
