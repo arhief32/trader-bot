@@ -2,6 +2,9 @@
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use App\Models\Info;
+use App\Models\PositionRisk;
+use App\Models\Order;
 
 function testFunction()
 {
@@ -18,6 +21,23 @@ function requestExchangeInfo()
     ]);
     $request_exchange_info = $client_exchange_info->request('GET', '/fapi/v1/exchangeInfo');
     $response_exchange_info = json_decode($request_exchange_info->getBody());
+
+    // save to db
+    foreach($response_exchange_info->symbols as $row_symbols)
+    {
+        Info::create([
+            'symbol' => $row_symbols->symbol,
+            'pair' => $row_symbols->pair,
+            'base_asset' => $row_symbols->baseAsset,
+            'quote_asset' => $row_symbols->quoteAsset,
+            'margin_asset' => $row_symbols->marginAsset,
+            'price_precision' => $row_symbols->pricePrecision,
+            'quantity_precision' => $row_symbols->quantityPrecision,
+            'base_asset_precision' => $row_symbols->baseAssetPrecision,
+            'quote_precision' => $row_symbols->quotePrecision,
+        ]);
+    }
+
     return $response_exchange_info;
 }
 
@@ -37,7 +57,8 @@ function setPrecision()
 
 function getPrecision($symbol)
 {
-    return getRedis('PRECISION_'.$symbol);
+    // return getRedis('PRECISION_'.$symbol);
+    return Info::where('symbol', $symbol)->first();
 }
 
 function diffOrderPrice(int $price_precision)
@@ -137,6 +158,7 @@ function requestAccountInformation()
     $timestamp = intval(microtime(true) * 1000);    
     $query=[
         'timestamp' => $timestamp,
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
     ];
     $query_string = http_build_query($query);
     
@@ -170,6 +192,7 @@ function requestPositionRisk()
     $timestamp = intval(microtime(true) * 1000);    
     $query=[
         'timestamp' => $timestamp,
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
     ];
     $query_string = http_build_query($query);
     
@@ -180,19 +203,45 @@ function requestPositionRisk()
     $query['signature'] = $signature;
     
     // request to get price real-time
-    $client_account_information = new \GuzzleHttp\Client([
+    $client_position_risk = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
         'verify'=> false,
         'debug' => false, // optional
     ]);
-    $request_account_information = $client_account_information->request('GET', '/fapi/v2/positionRisk', [
+    $request_position_risk = $client_position_risk->request('GET', '/fapi/v2/positionRisk', [
         'headers' => [
             'X-MBX-APIKEY' => $api_key,
         ],
         'query' => $query,
     ]);
-    $response_account_information = json_decode($request_account_information->getBody());
-    return $response_account_information;
+    $response_position_risk = json_decode($request_position_risk->getBody());
+
+    // truncate
+    PositionRisk::truncate();
+    // save to db
+    foreach($response_position_risk as $row_position_risk){
+        if($row_position_risk->positionAmt != 0){
+            PositionRisk::create([
+                'symbol' => $row_position_risk->symbol,
+                'position_amount' => $row_position_risk->positionAmt,
+                'entry_price' => $row_position_risk->entryPrice,
+                'mark_price' => $row_position_risk->markPrice,
+                'unrealized_profit' => $row_position_risk->unRealizedProfit,
+                'liquidation_price' => $row_position_risk->liquidationPrice,
+                'leverage' => $row_position_risk->leverage,
+                'max_notional_value' => $row_position_risk->maxNotionalValue,
+                'margin_type' => $row_position_risk->marginType,
+                'isolated_margin' => $row_position_risk->isolatedMargin,
+                'is_auto_add_margin' => $row_position_risk->isAutoAddMargin,
+                'position_side' => $row_position_risk->positionSide,
+                'notional' => $row_position_risk->notional,
+                'isolated_wallet' => $row_position_risk->isolatedWallet,
+                'update_time' => $row_position_risk->updateTime,
+            ]);
+        }
+    }
+
+    return $response_position_risk;
 }
 
 function requestTradeNewOrder($symbol, $side, $amount)
@@ -229,6 +278,7 @@ function requestTradeNewOrder($symbol, $side, $amount)
         'type' => 'MARKET',
         'quantity' => (string)$quantity,
         'workingType' => 'MARK_PRICE',
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
         'timestamp' => $timestamp,
     ];
     
@@ -254,6 +304,31 @@ function requestTradeNewOrder($symbol, $side, $amount)
     ]);
     $response_trade_new_order = json_decode($request_trade_new_order->getBody());
     insertLogOrder('logs/trade/trade.log', $response_trade_new_order);
+    
+    // save to db
+    Order::create([
+        'client_order_id' => $response_trade_new_order->clientOrderId,
+        'average_price' => $response_trade_new_order->avgPrice,
+        'close_position' => $response_trade_new_order->closePosition,
+        'cumulative_quantity' => $response_trade_new_order->cumQty,
+        'cumulative_quote' => $response_trade_new_order->cumQuote,
+        'executed_quantity' => $response_trade_new_order->executedQty,
+        'order_id' => $response_trade_new_order->orderId,
+        'origin_quantity' => $response_trade_new_order->origQty,
+        'origin_type' => $response_trade_new_order->origType,
+        'position_side' => $response_trade_new_order->positionSide,
+        'price' => $response_trade_new_order->price,
+        'price_protect' => $response_trade_new_order->priceProtect,
+        'reduce_only' => $response_trade_new_order->reduceOnly,
+        'side' => $response_trade_new_order->side,
+        'status' => $response_trade_new_order->status,
+        'stop_price' => $response_trade_new_order->stopPrice,
+        'symbol' => $response_trade_new_order->symbol,
+        'time_in_force' => $response_trade_new_order->timeInForce,
+        'type' => $response_trade_new_order->type,
+        'working_type' => $response_trade_new_order->workingType,
+    ]);
+
     return $response_trade_new_order;
 }
 
@@ -278,6 +353,7 @@ function requestTakeProfit($symbol, $side, $tp_percent)
         'type' => 'TAKE_PROFIT_MARKET',
         'stopPrice' => $stop_price,
         'closePosition' => 'true',
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
         'timestamp' => $timestamp,
     ];
     
@@ -335,6 +411,7 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
         'side' => $side,
         'type' => 'MARKET',
         'quantity' => (string)$quantity,
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
         'workingType' => 'MARK_PRICE',
     ];
     
@@ -356,6 +433,7 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
         'stopPrice' => (string)$stop_price,
         'closePosition' => 'true',
         'priceProtect' => 'true',
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
         'workingType' => 'MARK_PRICE',
     ];
     // STOP_MARKET
@@ -440,11 +518,21 @@ function insertLogAsset($path, $data)
     ])->info(json_encode($data));
 }
 
-function insertLogOrder($path, $data)
+function insertLogIndicator($data)
 {
     Log::build([
         'driver' => 'daily',
-        'path' => storage_path($path),
+        'path' => storage_path('logs/indicator/indicator.log'),
+        'level' => env('LOG_LEVEL', 'info'),
+        'days' => 14,
+    ])->info(json_encode($data));
+}
+
+function insertLogOrder($data)
+{
+    Log::build([
+        'driver' => 'daily',
+        'path' => storage_path('logs/order/order.log'),
         'level' => env('LOG_LEVEL', 'info'),
         'days' => 14,
     ])->info(json_encode($data));

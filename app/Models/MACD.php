@@ -217,10 +217,10 @@ class MACD extends Model
             $macd_line = $macd[$i];
             $signal_line = $ema9[$i];
 
-            $data[$i]['macd']['ema12'] = $ema12_line;
-            $data[$i]['macd']['ema26'] = $ema26_line;
-            $data[$i]['macd']['macd_line'] = $macd_line;
-            $data[$i]['macd']['signal_line'] = $signal_line;
+            $data[$i]['macd']['ema12'] = sprintf('%.8f', $ema12_line);
+            $data[$i]['macd']['ema26'] = sprintf('%.8f', $ema26_line);
+            $data[$i]['macd']['macd_line'] = sprintf('%.8f', $macd_line);
+            $data[$i]['macd']['signal_line'] = sprintf('%.8f', $signal_line);
 
             if($i != 0){
                 if($data[$i-1]['macd']['macd_line'] < $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] > $data[$i]['macd']['signal_line']){

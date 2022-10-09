@@ -3,10 +3,8 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Redis;
+use App\Models\PositionRisk;
 use App\Models\MACD;
-use App\Models\RSI;
 
 class CryptoMarket extends Command
 {
@@ -34,50 +32,56 @@ class CryptoMarket extends Command
         // get all assets from env
         // $assets = env('coins');
         // $assets = explode(',', $assets);
-        // $assets = getRedis('LIST_ASSETS');
-        $assets = ['ETHUSDT','BTCUSDT','ADAUSDT'];
+        $symbols = ['XLMUSDT', 'XRPUSDT', 'UNFIUSDT', 'XMRUSDT', 'KAVAUSDT', 'ETHUSDT', 'BTCUSDT', 'MKRUSDT', 'RVNUSDT', 'COMPUSDT'];
 
-        // check position market
-        $position_risk = requestPositionRisk();
-        foreach ($position_risk as $row_position_risk) {
-            if ((float)$row_position_risk->positionAmt != 0) {
-                if (getRedis('POSITION_RISK_' . $row_position_risk->symbol) == false) {
-                    setRedis('POSITION_RISK_' . $row_position_risk->symbol, $row_position_risk);
-                }
-            }
-            else {
-                deleteRedis('POSITION_RISK_' . $row_position_risk->symbol);
-            }
-        }
-
-        foreach ($assets as $asset) {
+        // update position risk
+        requestPositionRisk();
+        
+        foreach ($symbols as $symbol) {
             // get data current asset
             $interval = '1m';
             $limit = '60';
-            $response_klines = requestKlines($asset, $interval, $limit);
+            $response_klines = requestKlines($symbol, $interval, $limit);
 
-            // // rsi
-            // $response_klines = RSI::calculate($response_klines);
             // // macd
-            $response_klines = MACD::calculate($response_klines);
-
-            // $end_response_klines = end($response_klines);
-            // if ($end_response_klines['macd']['status'] == 'SELL') {
-            //     if(getRedis('POSITION_RISK_' .$asset) != false) {
-            //         requestTradeNewOrder($asset, 'SELL', 20);
-            //     }
-            //     requestTradeNewOrder($asset, 'SELL', 20);
-            // } else if($end_response_klines['macd']['status'] == 'BUY') {
-            //     if(getRedis('POSITION_RISK_' .$asset) != false) {
-            //         requestTradeNewOrder($asset, 'BUY', 20);
-            //     }
-            //     requestTradeNewOrder($asset, 'BUY', 20);
-            // }
+            $macd = MACD::calculate($response_klines);
+            $last_macd = end($macd);
 
             // insert log each asset
-            $log_path = 'logs/cryptomarket/' . $asset . '/' . $asset . '.log';
-            $log_data = end($response_klines);
-            insertLogAsset($log_path, $log_data);
+            $log_path = 'logs/cryptomarket/' . $symbol . '/' . $symbol . '.log';
+            insertLogAsset($log_path, $last_macd);
+            insertLogIndicator([
+                'symbol' => $symbol,
+                'macd' => $last_macd['macd'],
+            ]);
+
+			// if position risk from binance/db is 0
+            $position_risk = PositionRisk::where('symbol', $symbol)->first();
+            if($position_risk == false){
+                if($last_macd['macd']['status'] == 'SELL'){
+                    requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                } elseif($last_macd['macd']['status'] == 'BUY'){
+                    requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                }
+            }
+
+            if($position_risk == true){
+                if($last_macd['macd']['status'] == 'SELL' || $last_macd['macd']['status'] == 'BUY'){
+					// close position first
+                    if($position_risk->position_amount > 0){
+                        requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                    } else {
+                        requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                    }
+                }
+
+				// enter position when condition status SELL or BUY
+                if($last_macd['macd']['status'] == 'SELL'){
+                    requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                } elseif($last_macd['macd']['status'] == 'BUY'){
+                    requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                }
+            }
         }
     }
 }
