@@ -33,7 +33,7 @@ class CryptoMarket extends Command
         // get all assets from env
         // $assets = env('coins');
         // $assets = explode(',', $assets);
-        $symbols = ['GALAUSDT'];
+        $symbols = ['GALAUSDT', 'XLMUSDT', 'MKRUSDT'];
 
         // update position risk
         requestPositionRisk();
