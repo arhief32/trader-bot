@@ -28,6 +28,6 @@ class Order extends Model
         'symbol',
         'time_in_force',
         'type',
-        'working_type', 
+        'working_type',
     ];
 }

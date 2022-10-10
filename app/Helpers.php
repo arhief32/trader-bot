@@ -16,15 +16,14 @@ function requestExchangeInfo()
     // request to get price real-time
     $client_exchange_info = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_exchange_info = $client_exchange_info->request('GET', '/fapi/v1/exchangeInfo');
     $response_exchange_info = json_decode($request_exchange_info->getBody());
 
     // save to db
-    foreach($response_exchange_info->symbols as $row_symbols)
-    {
+    foreach ($response_exchange_info->symbols as $row_symbols) {
         Info::create([
             'symbol' => $row_symbols->symbol,
             'pair' => $row_symbols->pair,
@@ -46,12 +45,12 @@ function setPrecision()
     $exchange_info = requestExchangeInfo();
     $precision_list = $exchange_info->symbols;
 
-    foreach($precision_list as $symbol){
+    foreach ($precision_list as $symbol) {
         $data = [
             'price_precision' => $symbol->pricePrecision,
             'quantity_precision' => $symbol->quantityPrecision,
         ];
-        updateRedis('PRECISION_'.$symbol->symbol, $data);
+        updateRedis('PRECISION_' . $symbol->symbol, $data);
     }
 }
 
@@ -61,39 +60,26 @@ function getPrecision($symbol)
     return Info::where('symbol', $symbol)->first();
 }
 
-function diffOrderPrice(int $price_precision)
+function diffOrderPrice($symbol)
 {
-    switch ($price_precision) {
-        case 1:
-            return (float)1;
-            break;
-        case 2:
-            return (float)0.1;
-            break;
-        case 3:
-            return (float)0.01;
-            break;
-        case 4:
-            return (float)0.005;
-            break;
-        case 5:
-            return (float)0.0010;
-            break;
-        case 6:
-            return (float)0.00015;
-            break;
-        case 7:
-            return (float)0.000020;
-            break;
-        case 8:
-            return (float)0.0000025;
-            break;
-        case 9:
-            return (float)0.00000030;
-            break;
-        default:
-            return (float)0.000000035;
+    $historical_trades = requestHistoricalTrades($symbol);
+    $array_value = [];
+
+    foreach ($historical_trades as $row) {
+        array_push($array_value, $row->price);
     }
+
+    // remove duplicate
+    $array_value = array_values(array_unique($array_value));
+
+    // sort
+    sort($array_value);
+
+    return [
+        'count' => count($historical_trades),
+        'buy' => $array_value[0],
+        'sell' => end($array_value),
+    ];
 }
 
 function requestTicker($asset)
@@ -101,7 +87,7 @@ function requestTicker($asset)
     // request to get price real-time
     $client_ticker = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_ticker = $client_ticker->request('GET', '/fapi/v1/ticker/24hr', [
@@ -118,7 +104,7 @@ function requestKlines($asset, $interval, $limit)
     // request to get price real-time
     $client_klines = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_klines = $client_klines->request('GET', '/fapi/v1/klines', [
@@ -129,24 +115,66 @@ function requestKlines($asset, $interval, $limit)
         ],
     ]);
     $response_klines = json_decode($request_klines->getBody());
-    
+
     // define data
     $data = [];
-    foreach($response_klines as $row_klines){
+    foreach ($response_klines as $row_klines) {
         array_push($data, [
             'timestamp' => (int)$row_klines[0],
-            'date' => date('Y-m-d H:i:s', (int)$row_klines[0]/1000),
+            'date' => date('Y-m-d H:i:s', (int)$row_klines[0] / 1000),
             'open' => (float)$row_klines[1],
             'high' => (float)$row_klines[2],
             'low' => (float)$row_klines[3],
             'close' => (float)$row_klines[4],
         ]);
     }
-    
+
     return $data;
 }
 
-function signature($query_string, $secret) {
+function requestTrades($symbol)
+{
+    // request to get price real-time
+    $client_trades = new \GuzzleHttp\Client([
+        'base_uri' => env('BINANCE_FUTURES_URL'),
+        'verify' => false,
+        'debug' => false, // optional
+    ]);
+    $request_trades = $client_trades->request('GET', '/fapi/v1/trades', [
+        'query' => [
+            'symbol' => $symbol,
+        ],
+    ]);
+    $response_trades = json_decode($request_trades->getBody());
+    return $response_trades;
+}
+
+function requestHistoricalTrades($symbol)
+{
+    // define variable
+    $api_key = env('BINANCE_API_KEY');
+    // /fapi/v1/historicalTrades
+    // request to get price real-time
+    $client_historical_trades = new \GuzzleHttp\Client([
+        'base_uri' => env('BINANCE_FUTURES_URL'),
+        'verify' => false,
+        'debug' => false, // optional
+    ]);
+    $request_historical_trades = $client_historical_trades->request('GET', '/fapi/v1/historicalTrades', [
+        'headers' => [
+            'X-MBX-APIKEY' => $api_key,
+        ],
+        'query' => [
+            'symbol' => $symbol,
+            'limit' => 1000,
+        ],
+    ]);
+    $response_historical_trades = json_decode($request_historical_trades->getBody());
+    return $response_historical_trades;
+}
+
+function signature($query_string, $secret)
+{
     return hash_hmac('sha256', $query_string, $secret);
 }
 
@@ -155,23 +183,23 @@ function requestAccountInformation()
     // define variable
     $api_key = env('BINANCE_API_KEY');
     $api_secret = env('BINANCE_API_SECRET');
-    $timestamp = intval(microtime(true) * 1000);    
-    $query=[
+    $timestamp = intval(microtime(true) * 1000);
+    $query = [
         'timestamp' => $timestamp,
         'recvWindow' => env('BINANCE_RECVWINDOW'),
     ];
     $query_string = http_build_query($query);
-    
+
     // generate signature
     $signature = signature($query_string, $api_secret);
-    
+
     // insert signature to query params
     $query['signature'] = $signature;
-    
+
     // request to get price real-time
     $client_account_information = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_account_information = $client_account_information->request('GET', '/fapi/v2/account', [
@@ -189,23 +217,23 @@ function requestPositionRisk()
     // define variable
     $api_key = env('BINANCE_API_KEY');
     $api_secret = env('BINANCE_API_SECRET');
-    $timestamp = intval(microtime(true) * 1000);    
-    $query=[
+    $timestamp = intval(microtime(true) * 1000);
+    $query = [
         'timestamp' => $timestamp,
         'recvWindow' => env('BINANCE_RECVWINDOW'),
     ];
     $query_string = http_build_query($query);
-    
+
     // generate signature
     $signature = signature($query_string, $api_secret);
-    
+
     // insert signature to query params
     $query['signature'] = $signature;
-    
+
     // request to get price real-time
     $client_position_risk = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_position_risk = $client_position_risk->request('GET', '/fapi/v2/positionRisk', [
@@ -219,8 +247,8 @@ function requestPositionRisk()
     // truncate
     PositionRisk::truncate();
     // save to db
-    foreach($response_position_risk as $row_position_risk){
-        if($row_position_risk->positionAmt != 0){
+    foreach ($response_position_risk as $row_position_risk) {
+        if ($row_position_risk->positionAmt != 0) {
             PositionRisk::create([
                 'symbol' => $row_position_risk->symbol,
                 'position_amount' => $row_position_risk->positionAmt,
@@ -249,18 +277,18 @@ function requestTradeNewOrder($symbol, $side, $amount)
     // define variable
     $api_key = env('BINANCE_API_KEY');
     $api_secret = env('BINANCE_API_SECRET');
-    
+
     // define data
     $amount = (float)$amount;
     $last_price = (float)requestTicker($symbol)->lastPrice;
     $precision = getPrecision($symbol);
-    $price_precision = $precision->price_precision;
+    // $price_precision = $precision->price_precision;
     $quantity_precision = $precision->quantity_precision;
-    $quantity = round($amount/$last_price, $quantity_precision);
-    $diff_order_price = diffOrderPrice($price_precision);
-    $side == 'BUY' ? $diff_order_price = -($diff_order_price) : false;
+    $quantity = round($amount / $last_price, $quantity_precision);
+    // $diff_order_price = diffOrderPrice($price_precision);
+    // $side == 'BUY' ? $diff_order_price = -($diff_order_price) : false;
     // $price = round($last_price + $diff_order_price, $price_precision);
-    
+
     $timestamp = intval(microtime(true) * 1000);
     // $query_order = [
     //     'symbol' => $symbol,
@@ -272,7 +300,7 @@ function requestTradeNewOrder($symbol, $side, $amount)
     //     'timestamp' => $timestamp,
     // ];
     // MARKET
-    $query_order= [
+    $query_order = [
         'symbol' => $symbol,
         'side' => $side,
         'type' => 'MARKET',
@@ -281,19 +309,19 @@ function requestTradeNewOrder($symbol, $side, $amount)
         'recvWindow' => env('BINANCE_RECVWINDOW'),
         'timestamp' => $timestamp,
     ];
-    
+
     $query_string = http_build_query($query_order);
-    
+
     // generate signature
     $signature = signature($query_string, $api_secret);
-    
+
     // insert timestamps and signature to query params
     $query_order['signature'] = $signature;
-    
+
     // request to get price real-time
     $client_trade_new_order = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_trade_new_order = $client_trade_new_order->request('POST', '/fapi/v1/order', [
@@ -304,7 +332,84 @@ function requestTradeNewOrder($symbol, $side, $amount)
     ]);
     $response_trade_new_order = json_decode($request_trade_new_order->getBody());
     insertLogOrder('logs/trade/trade.log', $response_trade_new_order);
-    
+
+    // save to db
+    Order::create([
+        'client_order_id' => $response_trade_new_order->clientOrderId,
+        'average_price' => $response_trade_new_order->avgPrice,
+        'close_position' => $response_trade_new_order->closePosition,
+        'cumulative_quantity' => $response_trade_new_order->cumQty,
+        'cumulative_quote' => $response_trade_new_order->cumQuote,
+        'executed_quantity' => $response_trade_new_order->executedQty,
+        'order_id' => $response_trade_new_order->orderId,
+        'origin_quantity' => $response_trade_new_order->origQty,
+        'origin_type' => $response_trade_new_order->origType,
+        'position_side' => $response_trade_new_order->positionSide,
+        'price' => $response_trade_new_order->price,
+        'price_protect' => $response_trade_new_order->priceProtect,
+        'reduce_only' => $response_trade_new_order->reduceOnly,
+        'side' => $response_trade_new_order->side,
+        'status' => $response_trade_new_order->status,
+        'stop_price' => $response_trade_new_order->stopPrice,
+        'symbol' => $response_trade_new_order->symbol,
+        'time_in_force' => $response_trade_new_order->timeInForce,
+        'type' => $response_trade_new_order->type,
+        'working_type' => $response_trade_new_order->workingType,
+    ]);
+
+    return $response_trade_new_order;
+}
+
+function requestOrderLimit($symbol, $side, $amount)
+{
+    // define variable
+    $api_key = env('BINANCE_API_KEY');
+    $api_secret = env('BINANCE_API_SECRET');
+
+    // define data
+    $amount = (float)$amount;
+    $last_price = (float)requestTicker($symbol)->lastPrice;
+    $precision = getPrecision($symbol);
+    $quantity_precision = $precision->quantity_precision;
+    $quantity = round($amount / $last_price, $quantity_precision);
+    $diff_order_price = diffOrderPrice($symbol);
+    $side == 'BUY' ? $price = $diff_order_price['buy'] : $price = $diff_order_price['sell'];
+
+    $timestamp = intval(microtime(true) * 1000);
+    // LIMIT
+    $query_order = [
+        'symbol' => $symbol,
+        'side' => $side,
+        'type' => 'LIMIT',
+        'timeInForce' => 'GTC',
+        'quantity' => $quantity,
+        'price' => $price,
+        'timestamp' => $timestamp,
+    ];
+
+    $query_string = http_build_query($query_order);
+
+    // generate signature
+    $signature = signature($query_string, $api_secret);
+
+    // insert timestamps and signature to query params
+    $query_order['signature'] = $signature;
+
+    // request to get price real-time
+    $client_trade_new_order = new \GuzzleHttp\Client([
+        'base_uri' => env('BINANCE_FUTURES_URL'),
+        'verify' => false,
+        'debug' => false, // optional
+    ]);
+    $request_trade_new_order = $client_trade_new_order->request('POST', '/fapi/v1/order', [
+        'headers' => [
+            'X-MBX-APIKEY' => $api_key,
+        ],
+        'query' => $query_order,
+    ]);
+    $response_trade_new_order = json_decode($request_trade_new_order->getBody());
+    insertLogOrder('logs/trade/trade.log', $response_trade_new_order);
+
     // save to db
     Order::create([
         'client_order_id' => $response_trade_new_order->clientOrderId,
@@ -337,17 +442,17 @@ function requestTakeProfit($symbol, $side, $tp_percent)
     // define variable
     $api_key = env('BINANCE_API_KEY');
     $api_secret = env('BINANCE_API_SECRET');
-    
+
     // define data
     $tp_percent = (float)$tp_percent;
     $last_price = (float)requestTicker($symbol)->lastPrice;
     $price_precision = getPrecision($symbol)->price_precision;
     $side == 'BUY' ? 
-    $stop_price = round($last_price - ($tp_percent/100*$last_price), $price_precision): 
-    $stop_price = round($last_price + ($tp_percent/100*$last_price), $price_precision);
-    
-    $timestamp = intval(microtime(true) * 1000);    
-    $query=[
+        $stop_price = round($last_price - ($tp_percent / 100 * $last_price), $price_precision) :
+        $stop_price = round($last_price + ($tp_percent / 100 * $last_price), $price_precision);
+
+    $timestamp = intval(microtime(true) * 1000);
+    $query = [
         'symbol' => $symbol,
         'side' => $side,
         'type' => 'TAKE_PROFIT_MARKET',
@@ -356,7 +461,7 @@ function requestTakeProfit($symbol, $side, $tp_percent)
         'recvWindow' => env('BINANCE_RECVWINDOW'),
         'timestamp' => $timestamp,
     ];
-    
+
     $query_string = http_build_query($query);
 
     // generate signature
@@ -368,7 +473,7 @@ function requestTakeProfit($symbol, $side, $tp_percent)
     // request to get price real-time
     $client_take_profit = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_take_profit = $client_take_profit->request('POST', '/fapi/v1/order', [
@@ -386,14 +491,14 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
     // define variable
     $api_key = env('BINANCE_API_KEY');
     $api_secret = env('BINANCE_API_SECRET');
-    
+
     // define data order
     $amount = (float)$amount;
     $last_price = (float)requestTicker($symbol)->lastPrice;
     $precision = getPrecision($symbol);
     $price_precision = $precision->price_precision;
     $quantity_precision = $precision->quantity_precision;
-    $quantity = round($amount/$last_price, $quantity_precision);
+    $quantity = round($amount / $last_price, $quantity_precision);
     // $price = round($last_price + diffOrderPrice($price_precision), $price_precision);
 
     // LIMIT
@@ -406,7 +511,7 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
     //     'price' => (string)$price,
     // ];
     // MARKET
-    $query_order=(object)[
+    $query_order = (object)[
         'symbol' => $symbol,
         'side' => $side,
         'type' => 'MARKET',
@@ -414,19 +519,20 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
         'recvWindow' => env('BINANCE_RECVWINDOW'),
         'workingType' => 'MARK_PRICE',
     ];
-    
+
     // define take profit
     $tp_percent = (float)$tp_percent;
-    if($side == 'BUY'){
+    if ($side == 'BUY') {
         $side_profit = 'SELL';
-        $stop_price = round($last_price + ($tp_percent/100*$last_price), $price_precision);    
-    } else {
-        $side_profit = 'BUY';
-        $stop_price = round($last_price - ($tp_percent/100*$last_price), $price_precision);
+        $stop_price = round($last_price + ($tp_percent / 100 * $last_price), $price_precision);
     }
-    
+    else {
+        $side_profit = 'BUY';
+        $stop_price = round($last_price - ($tp_percent / 100 * $last_price), $price_precision);
+    }
+
     // TAKE_PROFIT_MARKET
-    $query_take_profit=(object)[
+    $query_take_profit = (object)[
         'symbol' => $symbol,
         'side' => $side_profit,
         'type' => 'TAKE_PROFIT_MARKET',
@@ -444,28 +550,28 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
     //     'stopPrice' => (string)$stop_price,
     //     'closePosition' => 'true',
     // ];
-    
+
     //define batchOrders
-    $batch_orders = json_encode([$query_order, $query_take_profit]); 
+    $batch_orders = json_encode([$query_order, $query_take_profit]);
     $timestamp = intval(microtime(true) * 1000);
-    
+
     $query = [
         'batchOrders' => $batch_orders,
         'timestamp' => $timestamp,
     ];
-    
+
     $query_string = http_build_query($query);
-    
+
     // generate signature
     $signature = signature($query_string, $api_secret);
-    
+
     // insert timestamps and signature to query params
     $query['signature'] = $signature;
 
     // request to get price real-time
     $client_batch_orders = new \GuzzleHttp\Client([
         'base_uri' => env('BINANCE_FUTURES_URL'),
-        'verify'=> false,
+        'verify' => false,
         'debug' => false, // optional
     ]);
     $request_batch_orders = $client_batch_orders->request('POST', '/fapi/v1/batchOrders', [
@@ -476,6 +582,35 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
     ]);
     $response_batch_orders = json_decode($request_batch_orders->getBody());
     insertLogOrder('logs/trade/trade.log', $response_batch_orders);
+
+    if (count($response_batch_orders) > 0) {
+        foreach ($response_batch_orders as $row_batch_order) {
+            // save to db
+            Order::create([
+                'client_order_id' => $row_batch_order->clientOrderId,
+                'average_price' => $row_batch_order->avgPrice,
+                'close_position' => $row_batch_order->closePosition,
+                'cumulative_quantity' => $row_batch_order->cumQty,
+                'cumulative_quote' => $row_batch_order->cumQuote,
+                'executed_quantity' => $row_batch_order->executedQty,
+                'order_id' => $row_batch_order->orderId,
+                'origin_quantity' => $row_batch_order->origQty,
+                'origin_type' => $row_batch_order->origType,
+                'position_side' => $row_batch_order->positionSide,
+                'price' => $row_batch_order->price,
+                'price_protect' => $row_batch_order->priceProtect,
+                'reduce_only' => $row_batch_order->reduceOnly,
+                'side' => $row_batch_order->side,
+                'status' => $row_batch_order->status,
+                'stop_price' => $row_batch_order->stopPrice,
+                'symbol' => $row_batch_order->symbol,
+                'time_in_force' => $row_batch_order->timeInForce,
+                'type' => $row_batch_order->type,
+                'working_type' => $row_batch_order->workingType,
+            ]);
+        }
+    }
+
     return $response_batch_orders;
 }
 

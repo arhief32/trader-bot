@@ -28,12 +28,18 @@ class EMA extends Model
             $data[$i]['ema']['ema2'] = sprintf('%.8f', $ema2_value_line);
             
             if($i != 0){
-                if($data[$i-1]['ema']['ema1'] < $data[$i-1]['ema']['ema2'] && $data[$i]['ema']['ema1'] > $data[$i]['ema']['ema2']){
+                // if($data[$i-1]['ema']['ema1'] < $data[$i-1]['ema']['ema2'] && $data[$i]['ema']['ema1'] > $data[$i]['ema']['ema2']){
+                //     $data[$i]['ema']['status'] = 'BUY';
+                // } else if($data[$i-1]['ema']['ema1'] > $data[$i-1]['ema']['ema2'] && $data[$i]['ema']['ema1'] < $data[$i]['ema']['ema2']){
+                //     $data[$i]['ema']['status'] = 'SELL';
+                // } else {
+                //     $data[$i]['ema']['status'] = 'NONE';
+                // }
+
+                if($data[$i]['ema']['ema1'] > $data[$i]['ema']['ema2']){
                     $data[$i]['ema']['status'] = 'BUY';
-                } else if($data[$i-1]['ema']['ema1'] > $data[$i-1]['ema']['ema2'] && $data[$i]['ema']['ema1'] < $data[$i]['ema']['ema2']){
+                } else if($data[$i]['ema']['ema1'] < $data[$i]['ema']['ema2']){
                     $data[$i]['ema']['status'] = 'SELL';
-                } else {
-                    $data[$i]['ema']['status'] = 'NONE';
                 }
             }
         }

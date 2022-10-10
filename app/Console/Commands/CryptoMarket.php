@@ -37,7 +37,7 @@ class CryptoMarket extends Command
 
         // update position risk
         requestPositionRisk();
-        
+
         foreach ($symbols as $symbol) {
             // get data current asset
             $interval = '1m';
@@ -57,31 +57,34 @@ class CryptoMarket extends Command
                 'ema' => $last_klines['ema'],
             ]);
 
-			// if position risk from binance/db is 0
+            // if position risk from binance/db is 0
             $position_risk = PositionRisk::where('symbol', $symbol)->first();
-            if($position_risk == false){
-                if($last_klines['ema']['status'] == 'SELL'){
-                    requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
-                } elseif($last_klines['ema']['status'] == 'BUY'){
-                    requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+            if ($position_risk == false) {
+                if ($last_klines['ema']['status'] == 'SELL') {
+                    // requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                    requestMultipleOrders($symbol, 'SELL', env('AMOUNT'), env('TP_PERCENT'));
+                }
+                elseif ($last_klines['ema']['status'] == 'BUY') {
+                    // requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                    requestMultipleOrders($symbol, 'BUY', env('AMOUNT'), env('TP_PERCENT'));
                 }
             }
 
-            if($position_risk == true){
-                if($last_klines['ema']['status'] == 'SELL' || $last_klines['ema']['status'] == 'BUY'){
-					// close position first
-                    if($position_risk->position_amount > 0){
-                        requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
-                    } else {
-                        requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+            if ($position_risk == true) {
+                // close position first
+                if ($position_risk->position_amount > 0 && $last_klines['ema']['status'] == 'SELL') {
+                    $close_position = requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                    if (isset($close_position->clientOrderId)) {
+                        // requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                        requestMultipleOrders($symbol, 'SELL', env('AMOUNT'), env('TP_PERCENT'));
                     }
                 }
-
-				// enter position when condition status SELL or BUY
-                if($last_klines['ema']['status'] == 'SELL'){
-                    requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
-                } elseif($last_klines['ema']['status'] == 'BUY'){
-                    requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                else if ($position_risk->position_amount < 0 && $last_klines['ema']['status'] == 'BUY') {
+                    $close_position = requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                    if (isset($close_position->clientOrderId)) {
+                        // requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                        requestMultipleOrders($symbol, 'BUY', env('AMOUNT'), env('TP_PERCENT'));
+                    }
                 }
             }
         }

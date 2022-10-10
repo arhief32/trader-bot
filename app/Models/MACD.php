@@ -180,12 +180,14 @@ class MACD extends Model
             }
 
             //check if we have 2 values to calc MACD Line
-            if (isset($data[$key]['signal_line']) && isset($data[$key-1]['signal_line']) && isset($data[$key]['macd_line']) && isset($data[$key-1]['macd_line'])) {
-                if($data[$key-1]['macd_line'] < $data[$key-1]['signal_line'] && $data[$key]['macd_line'] > $data[$key]['signal_line']){
+            if (isset($data[$key]['signal_line']) && isset($data[$key - 1]['signal_line']) && isset($data[$key]['macd_line']) && isset($data[$key - 1]['macd_line'])) {
+                if ($data[$key - 1]['macd_line'] < $data[$key - 1]['signal_line'] && $data[$key]['macd_line'] > $data[$key]['signal_line']) {
                     $data[$key]['status'] = 'BUY';
-                } else if($data[$key-1]['macd_line'] > $data[$key-1]['signal_line'] && $data[$key]['macd_line'] < $data[$key]['signal_line']){
+                }
+                else if ($data[$key - 1]['macd_line'] > $data[$key - 1]['signal_line'] && $data[$key]['macd_line'] < $data[$key]['signal_line']) {
                     $data[$key]['status'] = 'SELL';
-                } else {
+                }
+                else {
                     $data[$key]['status'] = 'NONE';
                 }
             }
@@ -197,21 +199,21 @@ class MACD extends Model
     static function calculate($data)
     {
         $data_close = [];
-        foreach($data as $row_close){
+        foreach ($data as $row_close) {
             array_push($data_close, $row_close['close']);
         }
 
         $ema12 = MACD::calculateEMA($data_close, 12);
         $ema26 = MACD::calculateEMA($data_close, 26);
-        $macd = []; 
-        for($i = 0; $i < count($ema12); $i++) {
+        $macd = [];
+        for ($i = 0; $i < count($ema12); $i++) {
             $macd_value = round((float)$ema12[$i] - (float)$ema26[$i], 8);
             array_push($macd, (float)$macd_value);
         }
 
         $ema9 = MACD::calculateEMA($macd, 9);
-        
-        for($i = 0; $i < count($data); $i++) {
+
+        for ($i = 0; $i < count($data); $i++) {
             $ema12_line = $ema12[$i];
             $ema26_line = $ema26[$i];
             $macd_line = $macd[$i];
@@ -222,13 +224,20 @@ class MACD extends Model
             $data[$i]['macd']['macd_line'] = sprintf('%.8f', $macd_line);
             $data[$i]['macd']['signal_line'] = sprintf('%.8f', $signal_line);
 
-            if($i != 0){
-                if($data[$i-1]['macd']['macd_line'] < $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] > $data[$i]['macd']['signal_line']){
+            if ($i != 0) {
+                // if($data[$i-1]['macd']['macd_line'] < $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] > $data[$i]['macd']['signal_line']){
+                //     $data[$i]['macd']['status'] = 'BUY';
+                // } else if($data[$i-1]['macd']['macd_line'] > $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] < $data[$i]['macd']['signal_line']){
+                //     $data[$i]['macd']['status'] = 'SELL';
+                // } else {
+                //     $data[$i]['macd']['status'] = 'NONE';
+                // }
+
+                if ($data[$i]['macd']['macd_line'] > $data[$i]['macd']['signal_line']) {
                     $data[$i]['macd']['status'] = 'BUY';
-                } else if($data[$i-1]['macd']['macd_line'] > $data[$i-1]['macd']['signal_line'] && $data[$i]['macd']['macd_line'] < $data[$i]['macd']['signal_line']){
+                }
+                else if ($data[$i]['macd']['macd_line'] < $data[$i]['macd']['signal_line']) {
                     $data[$i]['macd']['status'] = 'SELL';
-                } else {
-                    $data[$i]['macd']['status'] = 'NONE';
                 }
             }
         }
@@ -237,7 +246,7 @@ class MACD extends Model
     }
     static function calculateEMA(array $dps, int $m_range)
     {
-        $k = 2/($m_range + 1);
+        $k = 2 / ($m_range + 1);
         $ema_dps[0] = $dps[0];
         for ($i = 1; $i < count($dps); $i++) {
             $row_ema_dps = (float)$dps[$i] * (float)$k + (float)$ema_dps[$i - 1] * (1 - (float)$k);

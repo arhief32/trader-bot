@@ -93,6 +93,38 @@ Route::get('klines', function(Request $request){
     return response()->json(requestKlines($request->symbol, $request->interval, $request->limit));
 });
 
+Route::get('trades', function(Request $request){
+    $trades = requestTrades($request->symbol);
+
+    return response()->json([
+        'count' => count($trades),
+        'data' => $trades,
+    ]);
+});
+
+Route::get('historical-trades', function(Request $request){
+    $historical_trades = requestHistoricalTrades($request->symbol);
+    $price = requestTicker($request->symbol)->lastPrice;
+    $array_value = [];
+
+    foreach($historical_trades as $row){
+        array_push($array_value, $row->price);
+    }
+
+    // remove duplicate
+    $array_value = array_values(array_unique($array_value));
+    
+    // sort
+    sort($array_value);
+
+    return response()->json([
+        'count' => count($historical_trades),
+        'buy' => $array_value[0],
+        'price' => $price,
+        'sell' => end($array_value),
+    ]);
+});
+
 Route::get('account', function(){
     return requestAccountInformation();
 });
@@ -103,7 +135,8 @@ Route::get('position-risk', function(){
 
 Route::post('new-order', function(Request $request){
     // return response()->json(requestTradeNewOrder($request->symbol, $request->side, $request->amount));
-    return response()->json(requestTradeNewOrder($request->symbol, $request->side, $request->amount));
+    // return response()->json(requestTradeNewOrder($request->symbol, $request->side, $request->amount));
+    return response()->json(requestOrderLimit($request->symbol, $request->side, $request->amount));
 });
 
 Route::post('take-profit', function(Request $request){
