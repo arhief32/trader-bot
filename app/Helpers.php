@@ -614,6 +614,48 @@ function requestMultipleOrders($symbol, $side, $amount, $tp_percent)
     return $response_batch_orders;
 }
 
+function requestCancelOrder($symbol)
+{
+    // define variable
+    $api_key = env('BINANCE_API_KEY');
+    $api_secret = env('BINANCE_API_SECRET');
+    $order = Order::where([['symbol', '=', $symbol], ['origin_type', '=', 'TAKE_PROFIT_MARKET']])->latest()->first();
+    $timestamp = intval(microtime(true) * 1000);
+    $query = [
+        'symbol' => $symbol,
+        'orderId' => $order->order_id,
+        'timestamp' => $timestamp,
+        'recvWindow' => env('BINANCE_RECVWINDOW'),
+    ];
+    $query_string = http_build_query($query);
+
+    // generate signature
+    $signature = signature($query_string, $api_secret);
+
+    // insert signature to query params
+    $query['signature'] = $signature;
+
+    // request to cancel order
+    $client_cancel_order = new \GuzzleHttp\Client([
+        'base_uri' => env('BINANCE_FUTURES_URL'),
+        'verify' => false,
+        'debug' => false, // optional
+    ]);
+    $request_cancel_order = $client_cancel_order->request('DELETE', '/fapi/v1/order', [
+        'headers' => [
+            'X-MBX-APIKEY' => $api_key,
+        ],
+        'query' => $query,
+    ]);
+    $response_cancel_order = json_decode($request_cancel_order->getBody());
+
+    // update status order
+    Order::where('order_id', $response_cancel_order->orderId)
+        ->update(['status' => $response_cancel_order->status]);
+
+    return $response_cancel_order;
+}
+
 function getPrefixRedis($prefix)
 {
     $result = Redis::keys($prefix);

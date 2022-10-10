@@ -74,6 +74,7 @@ class CryptoMarket extends Command
                 // close position first
                 if ($position_risk->position_amount > 0 && $last_klines['ema']['status'] == 'SELL') {
                     $close_position = requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
+                    requestCancelOrder($symbol);
                     if (isset($close_position->clientOrderId)) {
                         // requestTradeNewOrder($symbol, 'SELL', env('AMOUNT'));
                         requestMultipleOrders($symbol, 'SELL', env('AMOUNT'), env('TP_PERCENT'));
@@ -81,6 +82,7 @@ class CryptoMarket extends Command
                 }
                 else if ($position_risk->position_amount < 0 && $last_klines['ema']['status'] == 'BUY') {
                     $close_position = requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
+                    requestCancelOrder($symbol);
                     if (isset($close_position->clientOrderId)) {
                         // requestTradeNewOrder($symbol, 'BUY', env('AMOUNT'));
                         requestMultipleOrders($symbol, 'BUY', env('AMOUNT'), env('TP_PERCENT'));
